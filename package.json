@@ -1,0 +1,17 @@
+{
+  "name": "google-ai-bs-parser",
+  "version": "1.0.0",
+  "description": "PoC for parsing bank statements using Google Document AI",
+  "main": "scripts/poc-google-doc-ai.ts",
+  "scripts": {
+    "parse": "ts-node scripts/poc-google-doc-ai.ts"
+  },
+  "dependencies": {
+    "@google-cloud/documentai": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
