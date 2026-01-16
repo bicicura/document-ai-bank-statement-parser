@@ -6,6 +6,10 @@ const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION = process.env.GOOGLE_DOC_AI_LOCATION || "us";
 const PROCESSOR_ID = process.env.GOOGLE_DOC_AI_PROCESSOR_ID;
 
+// Minimum confidence threshold for transaction properties
+// Properties below this are likely garbage (section headers, check images, etc.)
+const MIN_PROPERTY_CONFIDENCE = 0.1;
+
 interface Transaction {
   date: string;
   description: string;
@@ -62,15 +66,30 @@ interface ParsedResult {
     start: string;
     end: string;
   };
+  statementDate?: string;
 
   // Balances
-  startingBalance?: number;
-  endingBalance?: number;
+  balance?: {
+    start: number;
+    end: number;
+    change: number;
+  };
   currency?: string;
 
   // Transactions
-  transactions: Transaction[];
+  transactions: {
+    items: Transaction[];
+    totals: {
+      positive: number;
+      negative: number;
+      net: number;
+    };
+  };
   rawResponse: unknown;
+
+  // Internal tracking (removed before output)
+  _startingBalance?: number;
+  _endingBalance?: number;
 
   // Internal tracking (removed before output)
   _accountNumberConfidence?: number;
@@ -114,7 +133,14 @@ async function parseDocument(filePath: string) {
 
 function extractTransactions(document: any): ParsedResult {
   const result: ParsedResult = {
-    transactions: [],
+    transactions: {
+      items: [],
+      totals: {
+        positive: 0,
+        negative: 0,
+        net: 0,
+      },
+    },
     rawResponse: document,
   };
 
@@ -188,26 +214,36 @@ function extractTransactions(document: any): ParsedResult {
         }
         break;
       case "statement_end_date":
-      case "statement_date":
         result.statementPeriod = result.statementPeriod || { start: "", end: "" };
         const endDate = getNormalizedDate(entity) || value;
         if (!result.statementPeriod.end || endDate.length > result.statementPeriod.end.length) {
           result.statementPeriod.end = endDate;
         }
         break;
+      case "statement_date":
+        // Use as end date fallback and also store separately
+        result.statementPeriod = result.statementPeriod || { start: "", end: "" };
+        const stmtDate = getNormalizedDate(entity) || value;
+        if (!result.statementPeriod.end || stmtDate.length > result.statementPeriod.end.length) {
+          result.statementPeriod.end = stmtDate;
+        }
+        if (!result.statementDate || stmtDate.length > result.statementDate.length) {
+          result.statementDate = stmtDate;
+        }
+        break;
 
       // Balances
       case "starting_balance":
-        if (result.startingBalance == null) {
+        if (result._startingBalance == null) {
           const normalized = getNormalizedMoney(entity);
-          result.startingBalance = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
+          result._startingBalance = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
           if (normalized?.currency) result.currency = normalized.currency;
         }
         break;
       case "ending_balance":
-        if (result.endingBalance == null) {
+        if (result._endingBalance == null) {
           const normalized = getNormalizedMoney(entity);
-          result.endingBalance = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
+          result._endingBalance = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
           if (normalized?.currency) result.currency = normalized.currency;
         }
         break;
@@ -227,11 +263,15 @@ function extractTransactions(document: any): ParsedResult {
     let date = "";
     let description = "";
     let amount = 0;
+    let amountConfidence = 0;
     let currency = "";
-    let isDeposit = false;
 
     for (const prop of properties) {
       const propType = prop.type || "";
+      const propConfidence = prop.confidence || 0;
+
+      // Skip low confidence properties (garbage data)
+      if (propConfidence < MIN_PROPERTY_CONFIDENCE) continue;
 
       // Date (withdrawal or deposit)
       if (propType.includes("_date")) {
@@ -248,26 +288,31 @@ function extractTransactions(document: any): ParsedResult {
         }
       }
 
-      // Amount (withdrawal or deposit)
+      // Amount (withdrawal or deposit) - use highest confidence if both present
       if (propType.includes("transaction_withdrawal") && !propType.includes("_date") && !propType.includes("_description")) {
-        const normalized = getNormalizedMoney(prop);
-        if (normalized) {
-          amount = -Math.abs(normalized.amount); // Withdrawals are negative
-          currency = normalized.currency;
-        } else {
-          amount = -Math.abs(parseFloat(prop.mentionText?.replace(/[$,]/g, "") || "0"));
+        if (propConfidence > amountConfidence) {
+          const normalized = getNormalizedMoney(prop);
+          if (normalized) {
+            amount = -Math.abs(normalized.amount); // Withdrawals are negative
+            currency = normalized.currency;
+          } else {
+            amount = -Math.abs(parseFloat(prop.mentionText?.replace(/[$,]/g, "") || "0"));
+          }
+          amountConfidence = propConfidence;
         }
       }
 
       if (propType.includes("transaction_deposit") && !propType.includes("_date") && !propType.includes("_description")) {
-        const normalized = getNormalizedMoney(prop);
-        if (normalized) {
-          amount = Math.abs(normalized.amount); // Deposits are positive
-          currency = normalized.currency;
-        } else {
-          amount = Math.abs(parseFloat(prop.mentionText?.replace(/[$,]/g, "") || "0"));
+        if (propConfidence > amountConfidence) {
+          const normalized = getNormalizedMoney(prop);
+          if (normalized) {
+            amount = Math.abs(normalized.amount); // Deposits are positive
+            currency = normalized.currency;
+          } else {
+            amount = Math.abs(parseFloat(prop.mentionText?.replace(/[$,]/g, "") || "0"));
+          }
+          amountConfidence = propConfidence;
         }
-        isDeposit = true;
       }
     }
 
@@ -276,6 +321,22 @@ function extractTransactions(document: any): ParsedResult {
       const amountMatch = rawText.match(/(-?\$[\d,]+\.?\d*)$/) || rawText.match(/\s(-?[\d,]+\.\d{2})$/);
       if (amountMatch) {
         amount = parseFloat(amountMatch[1].replace(/[$,]/g, ""));
+      }
+    }
+
+    // Try to extract date from description if missing (common for check images)
+    // Pattern: "PD MM/DD/YYYY" or "CK #XXXX\nPD MM/DD/YYYY"
+    let checkNumber = "";
+    if (!date && description) {
+      const pdMatch = description.match(/PD\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+      if (pdMatch) {
+        const [month, day, year] = pdMatch[1].split("/");
+        date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      }
+      // Extract check number if present
+      const ckMatch = description.match(/CK\s*#\s*(\d+)/i);
+      if (ckMatch) {
+        checkNumber = ckMatch[1];
       }
     }
 
@@ -303,8 +364,8 @@ function extractTransactions(document: any): ParsedResult {
       .replace(/[\s\-→←↑↓<>]+$/, "")
       .trim();
 
-    // Skip if no meaningful data
-    if (!date && !description && amount === 0) continue;
+    // Skip if no valid date OR no valid amount (garbage transactions)
+    if (!date || !amount || isNaN(amount)) continue;
 
     const transaction: Transaction = {
       date,
@@ -316,11 +377,102 @@ function extractTransactions(document: any): ParsedResult {
     if (currency) {
       transaction.currency = currency;
     }
+    if (checkNumber) {
+      transaction.checkNumber = checkNumber;
+      // Checks written by account holder are withdrawals (negative)
+      // Google may extract them as deposits from check images
+      if (amount > 0) {
+        transaction.amount = -amount;
+      }
+    }
 
-    result.transactions.push(transaction);
+    result.transactions.items.push(transaction);
   }
 
-  // Clean up temporary confidence tracking fields
+  // Post-process: Extract missing checks from raw document text
+  // Google Document AI sometimes misses check amounts in check images
+  const existingCheckNumbers = new Set(
+    result.transactions.items
+      .filter(tx => tx.checkNumber)
+      .map(tx => tx.checkNumber)
+  );
+
+  if (document.text) {
+    // Pattern 1: "CK #XXXX\nPD MM/DD/YYYY\n$XXX.XX" (Eastern Bank check images)
+    const checkPattern1 = /CK\s*#\s*(\d+)\s*\n\s*PD\s*(\d{1,2}\/\d{1,2}\/\d{4})\s*\n?\s*\$?([\d,]+\.?\d*)/gi;
+    let match;
+    while ((match = checkPattern1.exec(document.text)) !== null) {
+      const [, checkNum, dateStr, amountStr] = match;
+      if (existingCheckNumbers.has(checkNum)) continue;
+
+      const [month, day, year] = dateStr.split("/");
+      const date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      const amount = -Math.abs(parseFloat(amountStr.replace(/,/g, "")));
+
+      if (!isNaN(amount) && amount !== 0) {
+        result.transactions.items.push({
+          date,
+          description: `Check #${checkNum}`,
+          amount,
+          checkNumber: checkNum,
+          rawText: match[0],
+        });
+        existingCheckNumbers.add(checkNum);
+      }
+    }
+
+    // Pattern 2: "260 03/14/2025 $1,080.00" (Citizens Bank check images)
+    const checkPattern2 = /\b(\d{3,4})\s+(\d{2}\/\d{2}\/\d{4})\s+\$([\d,]+\.?\d*)/g;
+    while ((match = checkPattern2.exec(document.text)) !== null) {
+      const [, checkNum, dateStr, amountStr] = match;
+      if (existingCheckNumbers.has(checkNum)) continue;
+
+      const [month, day, year] = dateStr.split("/");
+      const date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      const amount = -Math.abs(parseFloat(amountStr.replace(/,/g, "")));
+
+      if (!isNaN(amount) && amount !== 0) {
+        result.transactions.items.push({
+          date,
+          description: `Check #${checkNum}`,
+          amount,
+          checkNumber: checkNum,
+          rawText: match[0],
+        });
+        existingCheckNumbers.add(checkNum);
+      }
+    }
+  }
+
+  // Calculate transaction totals
+  for (const tx of result.transactions.items) {
+    result.transactions.totals.net += tx.amount;
+    if (tx.amount > 0) {
+      result.transactions.totals.positive += tx.amount;
+    } else {
+      result.transactions.totals.negative += tx.amount;
+    }
+  }
+
+  // Round totals to avoid floating point issues
+  result.transactions.totals.net = Math.round(result.transactions.totals.net * 100) / 100;
+  result.transactions.totals.positive = Math.round(result.transactions.totals.positive * 100) / 100;
+  result.transactions.totals.negative = Math.round(result.transactions.totals.negative * 100) / 100;
+
+  // Build balance object
+  if (result._startingBalance != null || result._endingBalance != null) {
+    const start = result._startingBalance ?? 0;
+    const end = result._endingBalance ?? 0;
+    result.balance = {
+      start,
+      end,
+      change: Math.round((end - start) * 100) / 100,
+    };
+  }
+
+  // Clean up temporary tracking fields
+  delete result._startingBalance;
+  delete result._endingBalance;
   delete result._accountNumberConfidence;
   delete result._clientNameConfidence;
 
@@ -354,7 +506,7 @@ async function main() {
 
   console.log(`Result saved to: ${outputPath}`);
   console.log(`Raw response saved to: ${rawPath}`);
-  console.log(`Found ${parsed.transactions.length} transactions`);
+  console.log(`Found ${parsed.transactions.items.length} transactions`);
 }
 
 main().catch((error) => {
