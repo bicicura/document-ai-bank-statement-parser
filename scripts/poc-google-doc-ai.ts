@@ -1,7 +1,7 @@
 import * as fs from "fs";
-import * as path from "path";
 import extractTransactions from "../helpers/extract/extractTransactionts"
 import parseDocument from "../helpers/parseDocument"
+import saveResult from "../helpers/saveResult"
 
 async function main() {
   const inputFile = process.argv[2] || "input/bank-statement.pdf";
@@ -14,22 +14,11 @@ async function main() {
   console.log(`Processing: ${inputFile}`);
 
   const document = await parseDocument(inputFile);
+
   const parsed = extractTransactions(document);
+  const { outputPath, rawPath } = saveResult(parsed)
 
-  // Save result (without rawResponse to keep file small)
-  const outputDir = "output";
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  const { rawResponse, ...cleanResult } = parsed;
-  const outputPath = path.join(outputDir, "parsed-result.json");
-  fs.writeFileSync(outputPath, JSON.stringify(cleanResult, null, 2));
-
-  // Save raw response separately if needed
-  const rawPath = path.join(outputDir, "raw-response.json");
-  fs.writeFileSync(rawPath, JSON.stringify(rawResponse, null, 2));
-
-  console.log(`Result saved to: ${outputPath}`);
-  console.log(`Raw response saved to: ${rawPath}`);
+  console.log(`Result saved to: ${outputPath}`, `Raw response saved to: ${rawPath}`);
   console.log(`Found ${parsed.transactions.items.length} transactions`);
 }
 
