@@ -26,8 +26,8 @@ export interface ParsedResult {
 
     // Statement period
     statementPeriod?: {
-        start: string;
-        end: string;
+        start?: string;
+        end?: string;
         issued?: string;
     };
 

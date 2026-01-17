@@ -143,5 +143,5 @@ export default function getTransactions(document: any) {
         transactions.push(transaction)
     }
 
-    return { transactions }
+    return transactions
 }

@@ -3,114 +3,120 @@ import getNormalizedDate from "./getNormalizedDate"
 import getBankName from "./getBankName"
 
 export default function getMetadata(document: any) {
+    const bankName = getBankName(document)
 
     let result = {
-        bankName: getBankName(document),
-        bankAddress: undefined,
-        accountNumber: undefined,
-        _accountNumberConfidence: undefined,
-        accountType: undefined,
-        clientName: undefined,
-        _clientNameConfidence: undefined,
-        clientAddress: undefined,
-        statementPeriod: undefined as any,
-        _startingBalance: undefined as any,
-        currency: undefined as any,
-        _endingBalance: undefined as any,
-        statementDate: undefined as any
+        bank: {
+            name: bankName,
+            address: undefined as string | undefined,
+        },
+        client: {
+            name: undefined as string | undefined,
+            address: undefined as string | undefined,
+        },
+        account: {
+            number: undefined as string | undefined,
+            type: undefined as string | undefined,
+        },
+        statementPeriod: {
+            start: undefined as string | undefined,
+            end: undefined as string | undefined,
+            issued: undefined as string | undefined,
+        },
+        currency: undefined as string | undefined,
+        _balance: {
+            start: undefined as number | undefined,
+            end: undefined as number | undefined,
+        },
+        // Internal tracking for confidence-based selection
+        _accountNumberConfidence: 0,
+        _clientNameConfidence: 0,
     }
 
-
-    // Second pass: extract all other metadata
     for (const entity of document.entities) {
         const type = entity.type || "";
         const value = entity.mentionText || "";
 
         switch (type) {
             case "bank_name":
-                break; // Already processed in first pass
-            case "bank_address":
-                result.bankAddress = value?.replace(/\n/g, ", ");
                 break;
 
-            // Account info
+            case "bank_address":
+                result.bank.address = value?.replace(/\n/g, ", ");
+                break;
+
             case "account_number":
-                // Take the one with highest confidence
                 const accountConfidence = entity.confidence || 0;
-                if (!result.accountNumber || accountConfidence > (result._accountNumberConfidence || 0)) {
-                    result.accountNumber = value;
+                if (!result.account.number || accountConfidence > result._accountNumberConfidence) {
+                    result.account.number = value;
                     result._accountNumberConfidence = accountConfidence;
                 }
                 break;
+
             case "account_type":
-                result.accountType = value;
+                result.account.type = value;
                 break;
 
-            // Client/holder info
             case "client_name":
-                // Skip if it looks like a bank name (Google sometimes misclassifies)
                 const cleanValue = value?.replace(/\n/g, " ").trim();
-                const looksLikeBankName = result.bankName &&
-                    cleanValue?.toLowerCase().includes(result.bankName.toLowerCase().split(" ")[0]);
+                const looksLikeBankName = bankName &&
+                    cleanValue?.toLowerCase().includes(bankName.toLowerCase().split(" ")[0]);
 
                 if (!looksLikeBankName) {
-                    // Take the one with highest confidence
                     const clientConfidence = entity.confidence || 0;
-                    if (!result.clientName || clientConfidence > (result._clientNameConfidence || 0)) {
-                        result.clientName = cleanValue;
+                    if (!result.client.name || clientConfidence > result._clientNameConfidence) {
+                        result.client.name = cleanValue;
                         result._clientNameConfidence = clientConfidence;
                     }
                 }
                 break;
+
             case "client_address":
-                result.clientAddress = value?.replace(/\n/g, ", ");
+                result.client.address = value?.replace(/\n/g, ", ");
                 break;
 
-            // Statement period
             case "statement_start_date":
-                result.statementPeriod = result.statementPeriod || { start: "", end: "" };
                 const startDate = getNormalizedDate(entity) || value;
-                // Prefer more complete dates (YYYY-MM-DD over YYYY-MM)
                 if (!result.statementPeriod.start || startDate.length > result.statementPeriod.start.length) {
                     result.statementPeriod.start = startDate;
                 }
                 break;
+
             case "statement_end_date":
-                result.statementPeriod = result.statementPeriod || { start: "", end: "" };
                 const endDate = getNormalizedDate(entity) || value;
                 if (!result.statementPeriod.end || endDate.length > result.statementPeriod.end.length) {
                     result.statementPeriod.end = endDate;
                 }
                 break;
+
             case "statement_date":
-                // Use as end date fallback and also store separately
-                result.statementPeriod = result.statementPeriod || { start: "", end: "" };
                 const stmtDate = getNormalizedDate(entity) || value;
                 if (!result.statementPeriod.end || stmtDate.length > result.statementPeriod.end.length) {
                     result.statementPeriod.end = stmtDate;
                 }
-                if (!result.statementDate || stmtDate.length > result.statementDate.length) {
-                    result.statementDate = stmtDate;
+                if (!result.statementPeriod.issued || stmtDate.length > result.statementPeriod.issued.length) {
+                    result.statementPeriod.issued = stmtDate;
                 }
                 break;
 
-            // Balances
             case "starting_balance":
-                if (result._startingBalance == null) {
+                if (result._balance.start == null) {
                     const normalized = getNormalizedMoney(entity);
-                    result._startingBalance = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
+                    result._balance.start = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
                     if (normalized?.currency) result.currency = normalized.currency;
                 }
                 break;
+
             case "ending_balance":
-                if (result._endingBalance == null) {
+                if (result._balance.end == null) {
                     const normalized = getNormalizedMoney(entity);
-                    result._endingBalance = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
+                    result._balance.end = normalized?.amount ?? parseFloat(value.replace(/[$,]/g, ""));
                     if (normalized?.currency) result.currency = normalized.currency;
                 }
                 break;
         }
     }
 
-    return result
+    const { _accountNumberConfidence, _clientNameConfidence, ...metadata } = result
+    return metadata
 }
