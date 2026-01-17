@@ -1,11 +1,11 @@
-import { ParsedResult } from "../../types"
+import { Document, ParsedResult } from "../../types"
 import getMetadata from "./getMetadata"
 import getTransactions from "./getTransactions"
 import getChecks from "./getChecks"
 import buildTotals from "./buildTotals"
 import buildBalance from "./buildBalance"
 
-export default function extractData(document: any): ParsedResult {
+export default function extractData(document: Document): ParsedResult {
     if (!document?.entities) {
         return {
             bank: {},

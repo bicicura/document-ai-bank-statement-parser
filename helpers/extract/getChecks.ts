@@ -1,6 +1,6 @@
-import { Transaction } from "../../types"
+import { Document, Transaction } from "../../types"
 
-export default function getChecks(document: any, transactions: Transaction[]) {
+export default function getChecks(document: Document, transactions: Transaction[]) {
     // Post-process: Extract missing checks from raw document text
     // Google Document AI sometimes misses check amounts in check images
     const existingCheckNumbers = new Set(

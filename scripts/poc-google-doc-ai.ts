@@ -15,6 +15,11 @@ async function main() {
 
   const document = await parseDocument(inputFile);
 
+  if (!document) {
+    console.error("Error: Failed to parse document");
+    process.exit(1);
+  }
+
   const output = extractData(document);
   const { outputPath, rawPath } = saveResult(output)
 

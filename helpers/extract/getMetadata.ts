@@ -1,8 +1,9 @@
 import getNormalizedMoney from "./getNormalizedMoney"
 import getNormalizedDate from "./getNormalizedDate"
 import getBankName from "./getBankName"
+import { Document } from "../../types"
 
-export default function getMetadata(document: any) {
+export default function getMetadata(document: Document) {
     const bankName = getBankName(document)
 
     let result = {
@@ -33,7 +34,7 @@ export default function getMetadata(document: any) {
         _clientNameConfidence: 0,
     }
 
-    for (const entity of document.entities) {
+    for (const entity of document.entities || []) {
         const type = entity.type || "";
         const value = entity.mentionText || "";
 

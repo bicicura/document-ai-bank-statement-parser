@@ -1,3 +1,9 @@
+import { google } from "@google-cloud/documentai/build/protos/protos"
+
+// Google Document AI types
+export type Document = google.cloud.documentai.v1.IDocument
+export type Entity = google.cloud.documentai.v1.Document.IEntity
+
 export interface Transaction {
     date: string;
     description: string;
@@ -48,5 +54,5 @@ export interface ParsedResult {
             net: number;
         };
     };
-    rawResponse: unknown;
+    rawResponse: Document;
 }

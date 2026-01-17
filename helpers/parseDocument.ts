@@ -2,8 +2,9 @@ import * as fs from "fs";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
 import getMimeType from "./getMimeType"
 import settings from "../settings"
+import { Document } from "../types"
 
-export default async function parseDocument(filePath: string) {
+export default async function parseDocument(filePath: string): Promise<Document | null | undefined> {
     if (!settings.PROJECT_ID || !settings.PROCESSOR_ID) {
         throw new Error(
             "Missing required environment variables: GOOGLE_CLOUD_PROJECT and GOOGLE_DOC_AI_PROCESSOR_ID"
