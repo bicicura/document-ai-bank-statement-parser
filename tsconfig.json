@@ -9,6 +9,6 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["scripts/**/*"],
+  "include": ["**/*"],
   "exclude": ["node_modules"]
 }
