@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import extractEntities from "../helpers/extract/extractEntities"
+import extractData from "../helpers/extract"
 import parseDocument from "../helpers/parseDocument"
 import saveResult from "../helpers/saveResult"
 
@@ -15,7 +15,7 @@ async function main() {
 
   const document = await parseDocument(inputFile);
 
-  const output = extractEntities(document);
+  const output = extractData(document);
   const { outputPath, rawPath } = saveResult(output)
 
   console.log(`Result saved to: ${outputPath}`, `Raw response saved to: ${rawPath}`);

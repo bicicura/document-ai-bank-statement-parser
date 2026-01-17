@@ -1,6 +1,6 @@
 import settings from "../../settings"
-import getNormalizedMoney from "../getNormalizedMoney"
-import getNormalizedDate from "../getNormalizedDate"
+import getNormalizedMoney from "./getNormalizedMoney"
+import getNormalizedDate from "./getNormalizedDate"
 import { Transaction } from "../../types"
 
 export default function getTransactions(document: any) {

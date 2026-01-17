@@ -1,4 +1,3 @@
-// Helper to extract normalized value from entity
 export default function getNormalizedMoney(entity: any): { amount: number; currency: string } | null {
     const nv = entity?.normalizedValue;
     if (nv?.moneyValue) {

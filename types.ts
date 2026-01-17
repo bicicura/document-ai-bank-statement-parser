@@ -9,24 +9,27 @@ export interface Transaction {
 }
 
 export interface ParsedResult {
-    // Bank info
-    bankName?: string;
-    bankAddress?: string;
+    bank: {
+        name?: string;
+        address?: string;
+    };
 
-    // Account info
-    accountNumber?: string;
-    accountType?: string;
+    client: {
+        name?: string;
+        address?: string;
+    }
 
-    // Client/holder info
-    clientName?: string;
-    clientAddress?: string;
+    account: {
+        type?: string;
+        number?: string;
+    }
 
     // Statement period
     statementPeriod?: {
         start: string;
         end: string;
+        issued?: string;
     };
-    statementDate?: string;
 
     // Balances
     balance?: {
@@ -46,12 +49,4 @@ export interface ParsedResult {
         };
     };
     rawResponse: unknown;
-
-    // Internal tracking (removed before output)
-    _startingBalance?: number;
-    _endingBalance?: number;
-
-    // Internal tracking (removed before output)
-    _accountNumberConfidence?: number;
-    _clientNameConfidence?: number;
 }

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
-import getMimeType from "../helpers/getMimeType"
+import getMimeType from "./getMimeType"
 import settings from "../settings"
 
 export default async function parseDocument(filePath: string) {

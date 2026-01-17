@@ -1,5 +1,5 @@
-import getNormalizedMoney from "../getNormalizedMoney"
-import getNormalizedDate from "../getNormalizedDate"
+import getNormalizedMoney from "./getNormalizedMoney"
+import getNormalizedDate from "./getNormalizedDate"
 import getBankName from "./getBankName"
 
 export default function getMetadata(document: any) {

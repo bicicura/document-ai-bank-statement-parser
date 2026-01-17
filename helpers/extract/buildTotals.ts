@@ -1,4 +1,4 @@
-export default function getTotals(transactions: any) {
+export default function buildTotals(transactions: any) {
     let positive = 0
     let negative = 0
     let net = 0
