@@ -1,5 +1,3 @@
-// Calculate transaction totals
-
 export default function getTotals(transactions: any) {
     let positive = 0
     let negative = 0
@@ -14,5 +12,9 @@ export default function getTotals(transactions: any) {
         }
     }
 
-    return { positive, negative, net }
+    return {
+        positive: Math.round(positive * 100) / 100,
+        negative: Math.round(negative * 100) / 100,
+        net: Math.round(net * 100) / 100
+    }
 }

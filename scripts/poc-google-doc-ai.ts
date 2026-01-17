@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import extractTransactions from "../helpers/extract/extractTransactionts"
+import extractEntities from "../helpers/extract/extractEntities"
 import parseDocument from "../helpers/parseDocument"
 import saveResult from "../helpers/saveResult"
 
@@ -15,11 +15,11 @@ async function main() {
 
   const document = await parseDocument(inputFile);
 
-  const parsed = extractTransactions(document);
-  const { outputPath, rawPath } = saveResult(parsed)
+  const output = extractEntities(document);
+  const { outputPath, rawPath } = saveResult(output)
 
   console.log(`Result saved to: ${outputPath}`, `Raw response saved to: ${rawPath}`);
-  console.log(`Found ${parsed.transactions.items.length} transactions`);
+  console.log(`Found ${output.transactions.items.length} transactions`);
 }
 
 main().catch((error) => {

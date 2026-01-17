@@ -3,8 +3,9 @@ import getMetadata from "./getMetadata"
 import getTransactions from "./getTransactions"
 import getChecks from "./getChecks"
 import getTotals from "./getTotals"
+import buildBalance from "../buildBalance"
 
-export default function extractTransactions(document: any): ParsedResult {
+export default function extractEntities(document: any): ParsedResult {
     const result: ParsedResult = {
         transactions: {
             items: [],
@@ -45,28 +46,10 @@ export default function extractTransactions(document: any): ParsedResult {
     result.transactions.items = [...result.transactions.items, ...checks]
 
     result.transactions.totals = getTotals(result.transactions.items)
-
-    // Round totals to avoid floating point issues
-    result.transactions.totals.net = Math.round(result.transactions.totals.net * 100) / 100;
-    result.transactions.totals.positive = Math.round(result.transactions.totals.positive * 100) / 100;
-    result.transactions.totals.negative = Math.round(result.transactions.totals.negative * 100) / 100;
-
-    // Build balance object
-    if (result._startingBalance != null || result._endingBalance != null) {
-        const start = result._startingBalance ?? 0;
-        const end = result._endingBalance ?? 0;
-        result.balance = {
-            start,
-            end,
-            change: Math.round((end - start) * 100) / 100,
-        };
-    }
+    result.balance = buildBalance(result._startingBalance, result._endingBalance)
 
     // Clean up temporary tracking fields
-    delete result._startingBalance;
-    delete result._endingBalance;
-    delete result._accountNumberConfidence;
-    delete result._clientNameConfidence;
+    const { _startingBalance, _endingBalance, _accountNumberConfidence, _clientNameConfidence, ...finalResult } = result
 
-    return result;
+    return finalResult;
 }
