@@ -9,7 +9,14 @@ import {
     cleanDescription
 } from "./transaction"
 
-export default function getTransactions(document: Document): Transaction[] {
+export type StatementPeriodInfo = {
+    startYear?: number
+    startMonth?: number
+    endYear?: number
+    endMonth?: number
+}
+
+export default function getTransactions(document: Document, statementPeriodInfo?: StatementPeriodInfo): Transaction[] {
     let lastDate = "";
     let transactions: Transaction[] = []
 
@@ -20,7 +27,7 @@ export default function getTransactions(document: Document): Transaction[] {
         const rawText = entity.mentionText?.trim().replace(/\n/g, " ") || "";
 
         // Extract from properties
-        const dateResult = extractDateFromProps(properties);
+        const dateResult = extractDateFromProps(properties, statementPeriodInfo);
         let date = dateResult?.date || "";
         if (dateResult?.lastDate) lastDate = dateResult.lastDate;
 

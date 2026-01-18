@@ -29,7 +29,12 @@ export default function getMetadata(document: Document) {
             start: undefined as number | undefined,
             end: undefined as number | undefined,
         },
-        // Internal tracking for confidence-based selection
+        _statementPeriodInfo: {
+            startYear: undefined as number | undefined,
+            startMonth: undefined as number | undefined,
+            endYear: undefined as number | undefined,
+            endMonth: undefined as number | undefined,
+        },
         _accountNumberConfidence: 0,
         _clientNameConfidence: 0,
     }
@@ -81,12 +86,24 @@ export default function getMetadata(document: Document) {
                 if (!result.statementPeriod.start || startDate.length > result.statementPeriod.start.length) {
                     result.statementPeriod.start = startDate;
                 }
+                // Extract year/month for inferring transaction years
+                const startDateValue = entity.normalizedValue?.dateValue;
+                if (startDateValue?.year && startDateValue?.month) {
+                    result._statementPeriodInfo.startYear = startDateValue.year;
+                    result._statementPeriodInfo.startMonth = startDateValue.month;
+                }
                 break;
 
             case "statement_end_date":
                 const endDate = getNormalizedDate(entity) || value;
                 if (!result.statementPeriod.end || endDate.length > result.statementPeriod.end.length) {
                     result.statementPeriod.end = endDate;
+                }
+                // Extract year/month for inferring transaction years
+                const endDateValue = entity.normalizedValue?.dateValue;
+                if (endDateValue?.year && endDateValue?.month) {
+                    result._statementPeriodInfo.endYear = endDateValue.year;
+                    result._statementPeriodInfo.endMonth = endDateValue.month;
                 }
                 break;
 
@@ -97,6 +114,12 @@ export default function getMetadata(document: Document) {
                 }
                 if (!result.statementPeriod.issued || stmtDate.length > result.statementPeriod.issued.length) {
                     result.statementPeriod.issued = stmtDate;
+                }
+                // Fallback: use statement_date for year if end_date not available
+                const stmtDateValue = entity.normalizedValue?.dateValue;
+                if (stmtDateValue?.year && stmtDateValue?.month && !result._statementPeriodInfo.endYear) {
+                    result._statementPeriodInfo.endYear = stmtDateValue.year;
+                    result._statementPeriodInfo.endMonth = stmtDateValue.month;
                 }
                 break;
 

@@ -16,8 +16,8 @@ export default function extractData(document: Document): ParsedResult {
         }
     }
 
-    const { _balance, ...metadata } = getMetadata(document)
-    const transactions = getTransactions(document)
+    const { _balance, _statementPeriodInfo, ...metadata } = getMetadata(document)
+    const transactions = getTransactions(document, _statementPeriodInfo)
     const checks = getChecks(document, transactions)
     const items = [...transactions, ...checks]
 
