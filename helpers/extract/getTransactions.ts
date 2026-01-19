@@ -1,4 +1,4 @@
-import { Document, Transaction } from "../../types"
+import { Document, Transaction, DescriptionConfidence } from "../../types"
 import {
     extractDateFromProps,
     extractDescriptionFromProps,
@@ -6,7 +6,8 @@ import {
     extractAmountFromRawText,
     extractDescriptionFromRawText,
     parseCheckInfo,
-    cleanDescription
+    cleanDescription,
+    findDescriptionInFullText
 } from "./transaction"
 
 export type StatementPeriodInfo = {
@@ -19,6 +20,8 @@ export type StatementPeriodInfo = {
 export default function getTransactions(document: Document, statementPeriodInfo?: StatementPeriodInfo): Transaction[] {
     let lastDate = "";
     let transactions: Transaction[] = []
+    const fullText = document.text || "";
+    const usedTextIndices = new Set<number>();
 
     for (const entity of document.entities || []) {
         if (entity.type !== "table_item") continue;
@@ -32,6 +35,7 @@ export default function getTransactions(document: Document, statementPeriodInfo?
         if (dateResult?.lastDate) lastDate = dateResult.lastDate;
 
         let description = extractDescriptionFromProps(properties);
+        let descriptionConfidence: DescriptionConfidence | undefined = description ? "high" : undefined;
         let { amount, currency } = extractAmountFromProps(properties);
 
         // Fallback: parse amount from rawText
@@ -53,8 +57,28 @@ export default function getTransactions(document: Document, statementPeriodInfo?
         // Fallback: extract description from rawText
         if (!description && rawText) {
             description = extractDescriptionFromRawText(rawText);
+            if (description) {
+                descriptionConfidence = "medium";
+            }
         }
         description = cleanDescription(description);
+
+        // Fallback: search in full document text for missing descriptions
+        if (!description && amount && fullText && date) {
+            const result = findDescriptionInFullText({
+                fullText,
+                amount,
+                date,
+                entities: document.entities || [],
+                currentEntityText: rawText,
+                usedIndices: usedTextIndices,
+            });
+            if (result) {
+                description = cleanDescription(result.description);
+                usedTextIndices.add(result.index);
+                descriptionConfidence = "low";
+            }
+        }
 
         // Skip invalid transactions
         if (!date || !amount || isNaN(amount)) continue;
@@ -69,6 +93,10 @@ export default function getTransactions(document: Document, statementPeriodInfo?
 
         if (currency) {
             transaction.currency = currency;
+        }
+
+        if (descriptionConfidence) {
+            transaction.descriptionConfidence = descriptionConfidence;
         }
 
         if (checkInfo.checkNumber) {

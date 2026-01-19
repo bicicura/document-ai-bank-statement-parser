@@ -16,8 +16,14 @@ export default async function parseDocument(filePath: string): Promise<Document 
     const fileBuffer = fs.readFileSync(filePath);
     const encodedFile = fileBuffer.toString("base64");
 
+    // Use specific processor version if set, otherwise use default
+    const processorVersion = settings.PROCESSOR_VERSION;
+    const processorPath = processorVersion
+        ? `projects/${settings.PROJECT_ID}/locations/${settings.LOCATION}/processors/${settings.PROCESSOR_ID}/processorVersions/${processorVersion}`
+        : `projects/${settings.PROJECT_ID}/locations/${settings.LOCATION}/processors/${settings.PROCESSOR_ID}`;
+
     const request = {
-        name: `projects/${settings.PROJECT_ID}/locations/${settings.LOCATION}/processors/${settings.PROCESSOR_ID}`,
+        name: processorPath,
         rawDocument: {
             content: encodedFile,
             mimeType: getMimeType(filePath),

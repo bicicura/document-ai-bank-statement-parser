@@ -4,6 +4,8 @@ import { google } from "@google-cloud/documentai/build/protos/protos"
 export type Document = google.cloud.documentai.v1.IDocument
 export type Entity = google.cloud.documentai.v1.Document.IEntity
 
+export type DescriptionConfidence = "high" | "medium" | "low"
+
 export interface Transaction {
     date: string;
     description: string;
@@ -12,6 +14,13 @@ export interface Transaction {
     balance?: number;
     checkNumber?: string;
     rawText?: string;
+    /**
+     * Confidence level for the description extraction:
+     * - high: extracted directly from Google Doc AI properties
+     * - medium: extracted from rawText (entity.mentionText)
+     * - low: found via fallback search in full document text
+     */
+    descriptionConfidence?: DescriptionConfidence;
 }
 
 export interface ParsedResult {
